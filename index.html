@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thợ Sửa Chữa AI - Trợ Lý Gia Đình</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .chat-app { background: white; width: 100%; max-width: 550px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; height: 88vh; }
+        .header { background: #ea580c; color: white; padding: 18px; text-align: center; }
+        .header h2 { margin: 0; font-size: 20px; }
+        .header p { margin: 5px 0 0; font-size: 13px; opacity: 0.9; }
+        .chat-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        .msg { padding: 12px 16px; border-radius: 14px; max-width: 82%; line-height: 1.5; font-size: 15px; white-space: pre-wrap; }
+        .ai-msg { background: #fff7ed; border: 1px solid #fed7aa; color: #1e293b; align-self: flex-start; }
+        .user-msg { background: #2563eb; color: white; align-self: flex-end; }
+        .user-msg img { max-width: 100%; border-radius: 8px; margin-bottom: 6px; display: block; }
+        .preview-area { background: #fff7ed; padding: 8px 15px; border-top: 1px solid #fed7aa; display: none; align-items: center; justify-content: space-between; }
+        .preview-area img { height: 50px; border-radius: 6px; border: 1px solid #ea580c; }
+        .btn-remove-img { background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+        .input-area { padding: 12px 15px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; gap: 8px; align-items: center; }
+        .btn-camera { background: #475569; color: white; border: none; padding: 11px 14px; border-radius: 10px; font-size: 18px; cursor: pointer; }
+        input[type="text"] { flex: 1; padding: 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 15px; }
+        .btn-send { background: #ea580c; color: white; border: none; padding: 12px 18px; border-radius: 10px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="chat-app">
+    <div class="header">
+        <h2>🛠️ Thợ Sửa Chữa AI</h2>
+        <p>Chụp ảnh hoặc mô tả sự cố điện, nước & đồ gia dụng</p>
+    </div>
+
+    <div class="chat-box" id="khungChat">
+        <div class="msg ai-msg">Chào bạn! Bạn có thể bấm nút 📷 để chụp/tải ảnh vật dụng bị hỏng, hoặc gõ mô tả sự cố để mình bắt bệnh và hướng dẫn cách tự sửa an toàn nhé!</div>
+    </div>
+
+    <div class="preview-area" id="khungXemTruoc">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <img id="anhXemTruoc" src="">
+            <span style="font-size: 13px; color: #9a3412;">Đã đính kèm ảnh sự cố</span>
+        </div>
+        <button class="btn-remove-img" onclick="xoaAnh()">Xóa ảnh</button>
+    </div>
+
+    <div class="input-area">
+        <input type="file" id="chonFileAnh" accept="image/*" capture="environment" style="display: none;" onchange="xuLyChonAnh(event)">
+        <button class="btn-camera" onclick="document.getElementById('chonFileAnh').click()" title="Chụp hoặc chọn ảnh">📷</button>
+
+        <input type="text" id="oCauHoi" placeholder="Mô tả sự cố (hoặc bấm Gửi luôn nếu đã có ảnh)..." onkeypress="if(event.key==='Enter') guiCauHoi()">
+        <button class="btn-send" onclick="guiCauHoi()">Gửi</button>
+    </div>
+</div>
+
+<script>
+    // Dán mã API Key (...MW-A) của bạn vào giữa hai dấu ngoặc kép bên dưới:
+    const API_KEY = "AQ.Ab8RN6LjjYpvx_L8Uh0hD5iydr0JGqnYqJCSJyJhSzODspya_g";
+
+    const VAI_TRO_CHUYEN_GIA = "Bạn là kỹ thuật viên sửa chữa điện nước và đồ gia dụng gia đình giàu kinh nghiệm. Nếu người dùng gửi ảnh, hãy quan sát kỹ hình ảnh để nhận diện tên thiết bị, linh kiện bị hỏng và nguyên nhân. Quy tắc bắt buộc: 1. Luôn đặt CẢNH BÁO AN TOÀN lên đầu tiên (nhắc ngắt cầu dao điện hoặc khóa van nước trước khi làm). 2. Liệt kê ngắn gọn dụng cụ và vật tư cần mua thay thế. 3. Hướng dẫn từng bước rõ ràng, thực tế. 4. Nếu lỗi nguy hiểm (chập điện ngầm, rò gas, bình nóng lạnh hở điện), khuyên gọi thợ chuyên nghiệp.";
+
+    let duLieuAnhBase64 = "";
+    let loaiFileAnh = "";
+
+    function xuLyChonAnh(event) {
+        let file = event.target.files.at(0);
+        if (!file) return;
+
+        loaiFileAnh = file.type;
+        let reader = new FileReader();
+        reader.onload = function(e) {
+            let ketQua = e.target.result;
+            document.getElementById("anhXemTruoc").src = ketQua;
+            document.getElementById("khungXemTruoc").style.display = "flex";
+            duLieuAnhBase64 = ketQua.split(",").at(1);
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function xoaAnh() {
+        duLieuAnhBase64 = "";
+        loaiFileAnh = "";
+        document.getElementById("chonFileAnh").value = "";
+        document.getElementById("khungXemTruoc").style.display = "none";
+    }
+
+    async function guiCauHoi() {
+        let oNhap = document.getElementById("oCauHoi");
+        let cauHoi = oNhap.value.trim();
+
+        if (!cauHoi && duLieuAnhBase64) {
+            cauHoi = "Hãy xem bức ảnh này, cho mình biết vật dụng này bị hỏng gì và hướng dẫn cách tự sửa chi tiết nhé!";
+        }
+        if (!cauHoi && !duLieuAnhBase64) return;
+
+        let anhHienThi = duLieuAnhBase64 ? document.getElementById("anhXemTruoc").src : "";
+        themTinNhan(cauHoi, "user-msg", anhHienThi);
+
+        let danhSachPhanTu = [{ text: cauHoi }];
+        if (duLieuAnhBase64) {
+            danhSachPhanTu.push({
+                inlineData: {
+                    mimeType: loaiFileAnh,
+                    data: duLieuAnhBase64
+                }
+            });
+        }
+
+        oNhap.value = "";
+        xoaAnh();
+
+        let tinCho = themTinNhan("⏳ Đang quan sát và kiểm tra phương án sửa chữa...", "ai-msg", "");
+
+        try {
+            let url = "https://googleapis.com" + API_KEY;
+            let phanHoi = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    systemInstruction: { parts: [{ text: VAI_TRO_CHUYEN_GIA }] },
+                    contents: [{ parts: danhSachPhanTu }]
+                })
+            });
+
+            let duLieu = await phanHoi.json();
+
+            if (duLieu.error) {
+                tinCho.innerText = "❌ Thông báo từ Google: " + duLieu.error.message;
+                return;
+            }
+
+            let traLoi = duLieu.candidates.at(0).content.parts.at(0).text;
+            tinCho.innerText = traLoi;
+        } catch (loi) {
+            tinCho.innerText = "⚠️ Chi tiết lỗi: " + loi.message;
+        }
+    }
+
+    function themTinNhan(noiDung, loaiClass, srcAnh) {
+        let khung = document.getElementById("khungChat");
+        let theDiv = document.createElement("div");
+        theDiv.className = "msg " + loaiClass;
+
+        if (srcAnh) {
+            let theImg = document.createElement("img");
+            theImg.src = srcAnh;
+            theDiv.appendChild(theImg);
+        }
+
+        let theChu = document.createElement("div");
+        theChu.innerText = noiDung;
+        theDiv.appendChild(theChu);
+
+        khung.appendChild(theDiv);
+        khung.scrollTop = khung.scrollHeight;
+        return theChu;
+    }
+</script>
+
+</body>
+</html>
